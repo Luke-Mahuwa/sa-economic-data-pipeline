@@ -1,5 +1,7 @@
 import pandas as pd
 
+from validate import validate_gdp_dataframe
+
 def transform_gdp_data(data):
     records = data[1]
 
@@ -22,5 +24,7 @@ def transform_gdp_data(data):
 
     df=df.dropna(subset = ["value"])
     df = df.sort_values("year")
+
+    validate_gdp_dataframe(df)
 
     return df

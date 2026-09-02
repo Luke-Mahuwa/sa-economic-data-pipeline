@@ -1,5 +1,7 @@
 import requests
 
+from validate import validate_raw_response
+
 BASE_URL = "https://api.worldbank.org/v2"
 
 def extract_gdp_data():
@@ -17,5 +19,7 @@ def extract_gdp_data():
     )
     response.raise_for_status()
 
-    return response.json()
-    
+    data = response.json()
+    validate_raw_response(data)
+
+    return data
