@@ -1,8 +1,10 @@
 import datetime
 
+import pandera.errors
+from pandera.pandas import Check, Column, DataFrameSchema
+
 EXPECTED_COUNTRY_CODE = "ZAF"
 MIN_YEAR = 1960
-REQUIRED_COLUMNS = {"country", "country_code", "indicator", "indicator_code", "year", "value"}
 
 
 class DataValidationError(Exception):
@@ -24,33 +26,30 @@ def validate_raw_response(data):
     return data
 
 
+def _gdp_schema():
+    current_year = datetime.date.today().year
+
+    return DataFrameSchema(
+        {
+            "country": Column(str, nullable=False),
+            "country_code": Column(str, Check.eq(EXPECTED_COUNTRY_CODE)),
+            "indicator": Column(str, nullable=False),
+            "indicator_code": Column(str, nullable=False),
+            "year": Column(int, Check.in_range(MIN_YEAR, current_year), nullable=False),
+            "value": Column(float, Check.ge(0), nullable=False),
+        },
+        unique=["year"],
+        strict=False,
+    )
+
+
 def validate_gdp_dataframe(df):
     if df.empty:
         raise DataValidationError("Transformed DataFrame has no rows.")
 
-    missing_columns = REQUIRED_COLUMNS - set(df.columns)
-    if missing_columns:
-        raise DataValidationError(f"Missing expected columns: {sorted(missing_columns)}")
-
-    if df["value"].isna().any():
-        raise DataValidationError("Found null GDP values after transformation.")
-
-    if (df["value"] < 0).any():
-        raise DataValidationError("Found negative GDP values.")
-
-    current_year = datetime.date.today().year
-    invalid_years = df[(df["year"] < MIN_YEAR) | (df["year"] > current_year)]
-    if not invalid_years.empty:
-        raise DataValidationError(
-            f"Found years outside the expected range [{MIN_YEAR}, {current_year}]: "
-            f"{invalid_years['year'].tolist()}"
-        )
-
-    if df["year"].duplicated().any():
-        raise DataValidationError("Found duplicate years in the dataset.")
-
-    unexpected_codes = set(df["country_code"].unique()) - {EXPECTED_COUNTRY_CODE}
-    if unexpected_codes:
-        raise DataValidationError(f"Unexpected country codes found: {unexpected_codes}")
+    try:
+        _gdp_schema().validate(df, lazy=True)
+    except pandera.errors.SchemaErrors as exc:
+        raise DataValidationError(str(exc.failure_cases)) from exc
 
     return df
